@@ -1,0 +1,170 @@
+// =========================================================================
+// MEASURE: Executive Summary - Copper vs FX (Smart Narrative)
+// PURPOSE: Generates a dynamic text analysis verifying the "Risk-On" hypothesis.
+// LOGIC:   Classifies correlation strength, direction, and compares current
+//          trend against the historical global baseline.
+// =========================================================================
+
+Executive_Summary_Copper = 
+// 1. Retrieve Core Calculation Context
+// Fetch the dynamic correlation for the selected period and the static global baseline
+VAR Current_Corr = [Current Period Correlation Copper vs USD_PLN]
+VAR Global_Corr  = [Correlation Global]
+
+// 2. Data Formatting
+// Convert numerical values to string format for text concatenation
+VAR Curr_String = FORMAT(Current_Corr, "0.00")
+VAR Glob_String = FORMAT(Global_Corr, "0.00")
+
+// 3. Logic: Strength Classification
+// Evaluate the magnitude of the relationship regardless of direction (Absolute Value)
+VAR Abs_Corr = ABS(Current_Corr)
+VAR Strength = 
+    SWITCH(TRUE(),
+        Abs_Corr > 0.70, "strong",      // Significant statistical relationship
+        Abs_Corr > 0.50, "moderate",    // Observable trend but with noise
+        "weak"                          // No clear linear relationship
+    )
+
+// 4. Logic: Market Regime Interpretation
+// Determine if the movement supports standard macro theories (Risk-On)
+VAR Direction = IF(Current_Corr < 0, "inverse", "positive")
+
+VAR Macro_Context = 
+    IF(Current_Corr < 0,
+        // Scenario A: Standard Inverse Correlation (High Copper -> Low USD/PLN)
+        "This confirms the 'Risk-On' mechanism, where rising Copper prices support Emerging Market currencies (PLN) against the USD.",
+        
+        // Scenario B: Market Dislocation (Positive Correlation) -> Anomaly Warning
+        "WARNING: Market dislocation detected. Copper and USD/PLN are moving in the same direction, contradicting historical 'Risk-On' patterns."
+    )
+
+// 5. Benchmarking vs Historical Baseline
+// Compare the current specific period against the long-term global average
+VAR Diff = ABS(Global_Corr) - Abs_Corr
+
+VAR Trend_Status = 
+    SWITCH(TRUE(),
+        // Current period is significantly weaker than history
+        Diff > 0.15, "although showing signs of decoupling compared to the long-term trend (Global: " & Glob_String & ").",
+        
+        // Current period is significantly stronger than history
+        Diff < -0.10, "showing a stronger relationship than the historical average (Global: " & Glob_String & ").",
+        
+        // Current period aligns with history
+        "remaining consistent with the long-term trend (Global: " & Glob_String & ")."
+    )
+
+// 6. Final Text Assembly
+// Concatenate all variables into a readable paragraph using UNICHAR(10) for line breaks
+RETURN
+    "• Intermarket Insight: Copper futures exhibit a " & Strength & " " & Direction & 
+    " correlation with USD
+
+// =========================================================================
+// MEASURE: Macro Regime Indicator (Advanced Logic)
+// PURPOSE: Multi-factor algorithmic classification of the market environment.
+// LOGIC:   1. Momentum of Copper/Gold Ratio (Growth vs Defensive).
+//          2. Energy Cost Impact (Stagflation Filter).
+//          3. Volatility thresholds (+/- 1.5%) to filter out market noise.
+// =========================================================================
+
+Macro_Regime_Indicator = 
+// 1. Input Variables: Retrieve Short-Term Signals
+VAR Ratio_Short_Term = [CopperGold_Ratio_7D_MA] // Fast moving average (Signal)
+VAR Energy_Return    = [Asset_Return_Period]      // Secondary factor for Stagflation detection
+
+// 2. Baseline Calculation: Long-Term Trend
+// Calculates a 30-day rolling average to serve as the structural baseline.
+// Uses DATESINPERIOD for dynamic windowing relative to the selected date context.
+VAR Ratio_Long_Term = 
+    AVERAGEX(
+        DATESINPERIOD('DATE_TABLE'[Date], LASTDATE('DATE_TABLE'[Date]), -30, DAY),
+        [CopperGold_Ratio_Raw]
+    )
+
+// 3. Momentum Calculation
+// Determines the percentage deviation of the short-term signal from the long-term baseline.
+VAR Trend_Diff = DIVIDE(Ratio_Short_Term - Ratio_Long_Term, Ratio_Long_Term)
+
+// 4. Regime Classification Logic (The "Brain")
+// Uses SWITCH(TRUE) to evaluate conditions in specific priority order.
+VAR Regime_Status = 
+    SWITCH(TRUE(),
+        // PRIORITY 1: STAGFLATION CHECK
+        // If the trend is defensive (Gold > Copper) AND Energy costs are spiking (>10%),
+        // override standard Risk-Off with Stagflation warning.
+        Trend_Diff < -0.015 && Energy_Return > 0.10, "⚠️ STAGFLATION RISK",
+        
+        // PRIORITY 2: REFLATION (RISK-ON)
+        // Copper outperforms Gold by more than 1.5% (Volatility Threshold).
+        Trend_Diff > 0.015,  "🟢 RISK-ON (Reflation)",
+        
+        // PRIORITY 3: DEFENSIVE (RISK-OFF)
+        // Gold outperforms Copper by more than 1.5%.
+        Trend_Diff < -0.015, "🔴 RISK-OFF (Defensive)",
+        
+        // DEFAULT: NOISE / TRANSITION
+        // Market moves are within the +/- 1.5% noise band.
+        "🟡 NEUTRAL / TRANSITION"
+    )
+
+// 5. Dynamic Business Narrative
+// Maps the technical classification to a readable executive summary.
+VAR Regime_Desc = 
+    SWITCH(Regime_Status,
+        "⚠️ STAGFLATION RISK",       "Gold outperforms Copper, but rising Energy costs threaten growth.",
+        "🟢 RISK-ON (Reflation)",    "Copper outperforms Gold. Market is pricing in economic expansion.",
+        "🔴 RISK-OFF (Defensive)",   "Gold outperforms Copper. Investors seek safety amidst slowing growth signals.",
+        "Market signals are mixed. No clear direction in Copper/Gold ratio."
+    )
+
+// 6. Final Output Construction
+// Concatenates the Status Header and the Description with line breaks for the UI card.
+RETURN
+    Regime_Status & UNICHAR(10) & UNICHAR(10) & Regime_Desc
+
+// =========================================================================
+// MEASURE: Global Correlation Baseline (Gas Price vs Weather)
+// PURPOSE: Calculates the long-term (Global) Pearson correlation coefficient (r)
+//          to serve as a benchmark for local trends.
+// FORMULA: Manual implementation of Pearson's r: Cov(X,Y) / (σX * σY)
+// =========================================================================
+
+Correlation_Global_CityGas = 
+// 1. Scope Definition
+// Remove local filter context (ALL) to assess the relationship over the entire history.
+VAR VisibleDates = ALL('DATE_TABLE'[Date]) 
+
+// 2. Virtual Table Materialization (ETL in Memory)
+// Construct a temporary table pairing the Independent Variable (HDD/Weather)
+// with the Dependent Variable (Gas Price) for each date.
+VAR DataPoints = 
+    FILTER(
+        ADDCOLUMNS(
+            VisibleDates,
+            "Val_X", [HH 7D AVG],   // Independent: Heating Degree Days (7D Avg)
+            "Val_Y", [Price AVG 7D] // Dependent: Gas Price (7D Avg)
+        ),
+        // Data Integrity Check: Exclude dates with missing values to prevent skew.
+        NOT ISBLANK([Val_X]) && NOT ISBLANK([Val_Y])
+    )
+
+// 3. Statistical Components: Arithmetic Means
+// Calculate the center of gravity for both variables.
+VAR AvgX = AVERAGEX(DataPoints, [Val_X])
+VAR AvgY = AVERAGEX(DataPoints, [Val_Y])
+
+// 4. Numerator Calculation (Covariance Proxy)
+// Sum of the product of deviations from the mean.
+VAR SumDiffProduct = SUMX(DataPoints, ([Val_X] - AvgX) * ([Val_Y] - AvgY))
+
+// 5. Denominator Calculation (Variance Proxy)
+// Sum of squared deviations. Note: We skip dividing by N as it cancels out in the final formula.
+VAR SumDiffX_Sq = SUMX(DataPoints, ([Val_X] - AvgX) ^ 2)
+VAR SumDiffY_Sq = SUMX(DataPoints, ([Val_Y] - AvgY) ^ 2)
+
+// 6. Final Ratio
+// Returns a value between -1 (Perfect Inverse) and +1 (Perfect Positive).
+RETURN
+    DIVIDE(SumDiffProduct, SQRT(SumDiffX_Sq * SumDiffY_Sq))
