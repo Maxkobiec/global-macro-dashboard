@@ -41,7 +41,7 @@ Analysis of intermarket relationships focusing on the feedback loop between comm
 ### C. Gas Price Sensitivity (Hypothesis Testing)
 Verification of the hypothesis: *"Does local weather drive global gas prices?"*
 * **Methodology:** Linear regression of Natural Gas prices (USD/MWh) against *Heating Degree Days* (HDD).
-* **Result:** A low Coefficient of Determination (R^2 approx 14.6%) suggests a weak linear relationship.
+* **Result:** A low Coefficient of Determination (R² approx 14.6%) suggests a weak linear relationship.
 * **Business Implication:** This confirms **Market Decoupling** — global fundamental drivers (supply chains, geopolitics) dominate over regional short-term weather demand.
 
 ![Gas Analysis](assets/gas_price_sensivity_static.png)
